@@ -1,6 +1,6 @@
 ## Disregard IAM users, acquire STS keys
 
-One of the best, most compelling features of AWS is all of the tools and APIs available for automation of your infrastructure. Engineers and administrators can take an empty account and have it ready to run scalable production workloads in mere minutes thanks to these tools. This automation is where the power of Cloud technologies really lives.
+One of the best, most compelling features of AWS is all of the tools and APIs available for automation of your infrastructure. Engineers and administrators can take an empty account and have it ready to run scalable production workloads in mere minutes thanks to these tools.
 
 But there's a dark side as well. Everyone has seen the stories of [the bots continuously scouring GitHub for IAM access keys](http://www.programmableweb.com/news/why-exposed-api-keys-and-sensitive-data-are-growing-cause-concern/analysis/2015/01/05), leading to stolen data, public embarrassment, and [thousands of dollars in bills](https://wptavern.com/ryan-hellyers-aws-nightmare-leaked-access-keys-result-in-a-6000-bill-overnight). AWS themselves offer advice on [dealing with exposed keys](https://aws.amazon.com/blogs/security/what-to-do-if-you-inadvertently-expose-an-aws-access-key/).
 
@@ -14,9 +14,7 @@ Most of these technologies use the [Security Token Service](http://docs.aws.amaz
 You may also be familiar with STS if you've ever created or used a cross-account role. Many SaaS vendors use [cross-account roles](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html) in order to manage customer accounts without needing to store long-lived IAM access keys.
 
 ### Federated Login
-Many organizations also use cross-account roles internally to manage access across several accounts. That is, they have a central, "management" account that the user will log into before assuming a role in one of many other accounts they may have for their development or production environments.
-
-Providing each person with an IAM user, a set of access keys, and a list of roles they can assume works great for some organizations. But other organizations may be managing hundreds of users and several AWS accounts. Organizations with such a footprint generally also already have centrilized user management with Active Directory, Google GSuite, or some other directory service. At that point, continuing to manage users and access control from that same centralized point becomes very attractive. Otherwise, role trusts can become a rat's nest - not to mention a security nightmare waiting to happen - and users may find the process of constantly exchanging credentials and switching between accounts confusing and frustrating.
+Providing each person with an IAM user and a set of access keys works great for some organizations. But other organizations may be managing hundreds of users and several AWS accounts. Organizations with such a footprint generally also already have centralized user management with Active Directory, Google GSuite, or some other directory service. At that point, managing AWS users and access control from that same centralized point becomes very attractive. Otherwise, role trusts can become a rat's nest - not to mention a security nightmare waiting to happen - and users may find the process of constantly exchanging credentials and switching between accounts confusing and frustrating.
 
 Luckily, AWS offers [several strategies for federated login](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers.html) through SAML or OpenID Connect identity providers like [Microsoft ADFS](https://aws.amazon.com/blogs/security/enabling-federation-to-aws-using-windows-active-directory-adfs-and-saml-2-0/) and [Google GSuite](https://aws.amazon.com/blogs/security/how-to-set-up-federated-single-sign-on-to-aws-using-google-apps/). There is a more-complete list of SAML providers [in the AWS docs](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_saml_3rd-party.html).
 
@@ -29,22 +27,18 @@ Of course, the hard part of using assume-role-with-saml from the command-line is
 
 By and large, though, the scripts automate the HTML login form for the identity provider to generate the SAML response, then they send that to AWS to assume the requested role.
 
-Providing users with a script like this means that users can generate STS keys with the same credentials they already use for other systems. And those keys will automatically expire after a short time to limit risk if they ever do get compromised.
+Providing users with a script like this means that they can generate STS keys with the same credentials they already use for other systems. And those keys will automatically expire after a short time to limit risk if they ever do get compromised.
 
 In this way, careful account administrators can do away with IAM users entirely and limit their attack surface.
 
 ### Putting it all together
-As I mentioned above, there are countless ways to put all of these pieces together into a workable solution. This is how I chose to do it.
-
 Where I work, we have dozens of accounts, hundreds of users, and a few different identity providers. Our situation and our needs are possibly atypical but probably not unique. After a few different attempts, this is the solution that we ended up with.
 
-#### The IdP Aggregator
-
-Due to having several different identity providers that could potentially be attached to any given account, we opted to use [Auth0](https://auth0.com) as our identity provider. It was already in use in a few places throughout the company and allowed us to use it as an identity provider interface and aggregator, abstracting away the differences and allowing us to easily mix and match which are attached to a given account.
+Due to having several different identity providers that could potentially be attached to any given account, we opted to use [Auth0](https://auth0.com) as our identity provider. It was already in use in a few places throughout the company and allowed us to use it as an identity provider interface and aggregator, abstracting away the differences and allowing us to easily mix and match which are attached to any given account.
 
 Our scripting hooks up the identity provider the same way in every account regardless of if it will use ADFS or Google under the hood, then the identity connections for ADFS etc are enabled based on which types of users will be logging in.
 
-We create a client for each AWS account as described in the [Auth0 documentation](https://auth0.com/docs/integrations/aws#obtain-aws-tokens-to-securely-call-aws-apis-and-resources) and attach account-specific client metadata to the client to enable the login.
+We create a client for each AWS account as described in the [Auth0 documentation](https://auth0.com/docs/integrations/aws#obtain-aws-tokens-to-securely-call-aws-apis-and-resources) and attach account-specific client metadata to the client to enable the login. Then we create an IAM Identity Provider in the AWS account as per [the AWS documentation](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_saml.html).
 
 `auth0-client.json`:
 ```json
@@ -207,4 +201,8 @@ pp JSON.parse(res.body)['Credentials']
 
 Running that script with valid values will output STS keys that are good for one hour. The script can easily be extended to write these keys to an AWS credentials file or inject them into the environment for use by the AWS CLI or other tooling.
 
+### Conclusion
+
 Using STS through Auth0 for users along with Instance Profiles (etc) for systems, we have been able to ensure that there are no IAM users or long-lived IAM access keys in any of our accounts, simplifying management and increasing security of our accounts.
+
+Users gain and lose access to accounts automatically as they join and leave the company or are added and removed to relevant security groups in our directory services. This means account administrators don't need to spend any extra time or effort managing access to their accounts and users don't need to worry about accidentally exposing their keys or regularly/manually rotating them.
