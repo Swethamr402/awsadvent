@@ -1,5 +1,4 @@
-## Disregard IAM users, acquire STS keys
-
+## Using Federated Login to provide AWS CLI/API access
 One of the best, most compelling features of AWS is all of the tools and APIs available for automation of your infrastructure. Engineers and administrators can take an empty account and have it ready to run scalable production workloads in mere minutes thanks to these tools.
 
 But there's a dark side as well. Everyone has seen the stories of [the bots continuously scouring GitHub for IAM access keys](http://www.programmableweb.com/news/why-exposed-api-keys-and-sensitive-data-are-growing-cause-concern/analysis/2015/01/05), leading to stolen data, public embarrassment, and [thousands of dollars in bills](https://wptavern.com/ryan-hellyers-aws-nightmare-leaked-access-keys-result-in-a-6000-bill-overnight). AWS themselves offer advice on [dealing with exposed keys](https://aws.amazon.com/blogs/security/what-to-do-if-you-inadvertently-expose-an-aws-access-key/).
@@ -26,11 +25,11 @@ Providing users with a script like this means that they can generate STS keys wi
 
 In this way, careful account administrators can do away with IAM users entirely and limit their attack surface.
 
-### Putting it all together
+### A Working Example with Auth0
 Where I work, we have dozens of accounts, hundreds of users, and a few different identity providers. Our situation and our needs are possibly atypical but probably not unique. After a few different attempts, this is the solution that we ended up with.
 
 #### Auth0 as an Identity provider
-We opted to use [Auth0](https://auth0.com) as our identity provider. Or, to be more specific, our identity provider broker.
+We opted to use [Auth0](https://auth0.com) as our identity provider. Or, to be more specific, our identity provider broker. Similar schemes can be achieved with other on-prem and SaaS identity providers, but the below will deal explicitly with Auth0.
 
 Auth0 is a SaaS identity provider hub that allows users to plug in and aggregate [a large number](https://auth0.com/docs/identityproviders) of other identity providers (including ADFS, GSuite, or even a local database) on the backend and extend them to provide authentication and authorization into their own applications or - in this case - flexibly integrate with third-party applications like AWS.
 
@@ -271,3 +270,5 @@ Running that script with valid values will output STS keys that are good for one
 Using STS through Auth0 for users along with Instance Profiles (etc) for systems, we have been able to ensure that there are no IAM users or long-lived IAM access keys in any of our accounts, simplifying management and increasing security of our accounts.
 
 Users gain and lose access to accounts automatically as they join and leave the company or are added and removed to relevant security groups in our directory services. This means account administrators don't need to spend any extra time or effort managing access to their accounts and users don't need to worry about accidentally exposing their keys or regularly/manually rotating them.
+
+While organizations that already have an identity provider can gain a lot of value from this or a similar architecture, smaller organizations without such infrastructure might have trouble getting a real return on investment from the work that this takes to set up in the first place. However, it is worth noting that Auth0 also provides an "identity provider" that consists of a database hosted by Auth0, so certain organizations could get the best of both worlds.
